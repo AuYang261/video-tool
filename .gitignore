@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+*.spec
+.DS_Store
+
+build/
+dist/
+release/
+video_tool_settings.json
