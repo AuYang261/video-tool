@@ -1388,32 +1388,85 @@ class VideoToolTUI:
         value = original or (0, 0, 0)
         names = ("小时", "分钟", "秒")
         for component in range(3):
-            while True:
-                rendered = []
-                for index, number in enumerate(value):
-                    part = f"{number:02d}"
-                    if index == component:
-                        part = f"{self.REVERSE} {part} {self.RESET}"
-                    rendered.append(part)
-                self.terminal.draw(
-                    [
-                        f"{self.BOLD}{self.BLUE}{title} · 设置{names[component]}{self.RESET}",
-                        "",
-                        "               " + " : ".join(rendered),
-                        "",
-                        f"{self.MUTED}↑/↓ 调整 · Enter 下一项/保存 · Esc 取消{self.RESET}",
-                    ]
-                )
-                key = self.terminal.read_key()
-                if key == "up":
-                    value = adjust_time_component(value, component, 1)
-                elif key == "down":
-                    value = adjust_time_component(value, component, -1)
-                elif key == "enter":
-                    break
-                elif key in ("esc", "quit"):
-                    return original
+            edited = self._edit_time_component(
+                title, names[component], value, component
+            )
+            if edited is None:
+                return original
+            value = edited
         return value
+
+    def _edit_time_component(
+        self,
+        title: str,
+        component_name: str,
+        value: Tuple[int, int, int],
+        component: int,
+    ) -> Optional[Tuple[int, int, int]]:
+        maximum = 99 if component == 0 else 59
+        buffer = f"{value[component]:02d}"
+        typing_started = False
+        error_message = ""
+        while True:
+            candidate = int(buffer) if buffer else -1
+            rendered = []
+            for index, number in enumerate(value):
+                part = f"{number:02d}"
+                if index == component:
+                    part = f"{self.REVERSE} {(buffer or ' '):>2} {self.RESET}"
+                rendered.append(part)
+            self.terminal.draw(
+                [
+                    f"{self.BOLD}{self.BLUE}{title} · "
+                    f"设置{component_name}{self.RESET}",
+                    "",
+                    "               " + " : ".join(rendered),
+                    "",
+                    (
+                        f"\x1b[31m  {error_message}{self.RESET}"
+                        if error_message
+                        else ""
+                    ),
+                    f"{self.MUTED}直接输入数字 · Backspace 删除 · "
+                    f"↑/↓ 调整{self.RESET}",
+                    f"{self.MUTED}Enter 下一项/保存 · Esc 取消 · "
+                    f"有效范围 0–{maximum}{self.RESET}",
+                ]
+            )
+            key = self.terminal.read_key()
+            if key in {"up", "down"}:
+                base = candidate if 0 <= candidate <= maximum else value[component]
+                parts = list(value)
+                parts[component] = base
+                value = adjust_time_component(
+                    (parts[0], parts[1], parts[2]),
+                    component,
+                    1 if key == "up" else -1,
+                )
+                buffer = f"{value[component]:02d}"
+                typing_started = False
+                error_message = ""
+            elif key.startswith("digit:"):
+                digit = key.split(":", 1)[1]
+                if not typing_started:
+                    buffer = digit
+                    typing_started = True
+                elif len(buffer) < 2:
+                    buffer += digit
+                error_message = ""
+            elif key == "backspace":
+                if not typing_started:
+                    typing_started = True
+                buffer = buffer[:-1]
+                error_message = ""
+            elif key == "enter":
+                if 0 <= candidate <= maximum:
+                    parts = list(value)
+                    parts[component] = candidate
+                    return parts[0], parts[1], parts[2]
+                error_message = f"{component_name}必须在 0 到 {maximum} 之间"
+            elif key in {"esc", "quit"}:
+                return None
 
     def _process_current_job(self) -> None:
         try:
