@@ -562,6 +562,11 @@ def list_browser_entries(current: Path, select_directory: bool) -> List[BrowserE
         entries.append(BrowserEntry("select_current", "选择当前目录", resolved))
     if resolved.parent != resolved:
         entries.append(BrowserEntry("parent", "..", resolved.parent))
+    elif os.name == "nt":
+        for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+            drive = Path(f"{letter}:\\")
+            if drive != resolved and drive.is_dir():
+                entries.append(BrowserEntry("directory", f"磁盘 {drive}", drive))
     children = list(resolved.iterdir())
     directories = sorted(
         (path for path in children if path.is_dir()),
